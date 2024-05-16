@@ -17,7 +17,7 @@ async def get_current_user(request: Request):
         raise credentials_exception
     try:
         payload = jwt.decode(token_cookie, SECRET_KEY, algorithms=[ALGORITHM])
-        id: int = payload.get("id")
+        id: int = int(payload.get("id"))
         if id is None:
             raise credentials_exception
     except DecodeError:

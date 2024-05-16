@@ -16,7 +16,17 @@ async def create_author(author_data: AuthorCreateM, current_user: str = Depends(
     await session.commit()
     return author
 
-@router.get("/authors/", response_model=List[Author])
+@router.get("/get-list", response_model=List[Author])
 async def get_authors(session: AsyncSession = Depends(get_session)):
     authors = await session.exec(select(Author))
     return authors.scalars().all()
+
+@router.get("/{author_id}", response_model=Author)
+async def get_author_by_id(author_id: int, session: AsyncSession = Depends(get_session)):
+    result = await session.execute(select(Author).filter(Author.id == author_id))
+    author = result.scalars().first()
+
+    if author is None:
+        raise HTTPException(status_code=404, detail="Author not found")
+
+    return author

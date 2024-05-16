@@ -10,8 +10,8 @@ from datetime import datetime, timedelta
 import jwt
 from app.config.config import SECRET_KEY
 
-from app.models import UserCreate, UserLogin
-from app.models import User
+from app.models import UserCreate, UserLogin, UserBook
+from app.models import User, Book
 from app.tasks import generate_and_send_password_email
 
 router = APIRouter()
@@ -47,7 +47,7 @@ async def user_login(user_login: UserLogin, response: Response, session: AsyncSe
     
     token_data = {
         "id": str(user.id),
-        "exp": datetime.utcnow() + timedelta(minutes=15)
+        "exp": datetime.utcnow() + timedelta(minutes=120)
     }
     token = jwt.encode(token_data, SECRET_KEY, algorithm="HS256")
     
@@ -62,3 +62,30 @@ async def auth_me(current_user: str = Depends(get_current_user)):
         "statusCode": 200,
         "user": current_user
     }
+    
+    
+@router.post("/add-book/{book_id}")
+async def add_book_to_user(book_id: int, current_user: User = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    book = await session.execute(select(Book).filter(Book.id == book_id).limit(1))
+    book_obj = book.scalars().first()
+    
+    if not book_obj:
+        raise HTTPException(status_code=404, detail="Book not found")
+
+    user_book = await session.execute(select(UserBook).filter_by(user_id=current_user, book_id=book_id))
+    if user_book.scalar():
+        raise HTTPException(status_code=400, detail="User already has this book")
+
+    # Create the relationship between the user and the book
+    user_book_relationship = UserBook(user_id=current_user, book_id=book_id)
+    session.add(user_book_relationship)
+    await session.commit()
+
+    return {"message": "Book added to user successfully"}
+
+@router.get("/get-favourites/")
+async def get_user_books(current_user: int = Depends(get_current_user), session: AsyncSession = Depends(get_session)):
+    user_books = await session.execute(select(Book).join(UserBook).filter(UserBook.user_id == current_user))
+    user_books = user_books.scalars().all()
+
+    return user_books
